@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kistwrap"
+version = "0.1.0"
+description = "Python CLI wrapper for the KiSThelP kinetics computational package."
+dependencies = [
+    "pandas",
+]
+
+[project.scripts]
+kistwrap = "kistwrap.cli:main"
+
+[tool.setuptools.package-data]
+kistwrap = ["bin/*.jar"]

@@ -16,12 +16,11 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import kisthep.file.*;
-package kisthelp_source.src;
 
 public class CLIinterface {
 
     
-    public final class Console {
+    public static final class Console {
 
         public static final Scanner SCANNER = new Scanner(System.in);
 
@@ -809,7 +808,7 @@ public class CLIinterface {
 
         // EQUILIBRIUM
         @Command(name = "EQUIL", description = "Performs an equilibrium calculations.", mixinStandardHelpOptions = true)
-        public static class CalcEquil implements Callable<Integer> {
+        public static class CalcEquil {
             
             Session workSession;
 
