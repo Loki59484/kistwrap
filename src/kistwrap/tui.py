@@ -21,7 +21,9 @@ from textual.widgets import (
     RadioButton,
     Select,
     TabbedContent,
-    TabPane
+    TabPane,
+    RichLog,
+    Static
 )
 from textual.widgets.option_list import Option
 from textual.containers import Vertical, Horizontal, Center, Grid, VerticalScroll
@@ -34,6 +36,7 @@ class KistwrapTUI(App):
     ]
 
     CSS = """
+    /* --- Base Layout --- */
     Screen {
         layout: grid;
         grid-size: 2 3;
@@ -41,15 +44,42 @@ class KistwrapTUI(App):
         grid-rows: 1fr 2fr auto;
     }
 
-    /* Placeholder Opacity */
+    #command-input {
+        column-span: 2;
+        border: none;
+        border-top: solid white;
+        background: $surface;
+    }
+
+    /* --- Global Inputs & Placeholders --- */
     Input .input--placeholder {
         color: white 30%;
     }
+
     Input.active-value .input--placeholder {
         color: white 100%;
     }
-    
-    /* Sidebar Styling */
+
+    /* --- Global Buttons --- */
+    .half-btns {
+        margin: 1;
+        width: 50%;
+    }
+
+    .full-btns {
+        margin: 1;
+        width: 100%;
+    }
+
+    .btn-remove-file {
+        min-width: 5;
+        width: 2;
+        height: 1;
+        border: none;
+        background: red;
+    }
+
+    /* --- Left Sidebar & Variables --- */
     #left-sidebar {
         layout: grid;
         grid-size: 1 3;
@@ -81,37 +111,32 @@ class KistwrapTUI(App):
         padding: 0;
     }
 
+    #var-buttonholder {
+        width: 100%;
+        padding:1;
+    }
+
     .var-title {
         color: yellow;
         text-style: bold;
         margin-bottom: 1;
     }
-    
+
     .var-row {
         height: 3;
         width: 100%;
     }
-    
+
     .var-row Input {
-        width: 1fr; 
+        width: 1fr;
         min-width: 5;
         padding: 0 1;
     }
 
-    .half-btns {
-        margin: 1;
-        width: 50%;
-    }
-
-    #var-buttonholder {
-        width: 100%;
-        padding: 1;
-    }
-
-    /* Main Display Panel */
+    /* --- Main Display & Tab Area --- */
     #display-panel {
         layout: grid;
-        grid-size: 2 1; 
+        grid-size: 2 1;
         grid-columns: 35 1fr;
         border: solid cyan;
         row-span: 2;
@@ -123,21 +148,12 @@ class KistwrapTUI(App):
         padding: 1;
         height: 100%;
     }
-    
+
     #results-area {
         height: 100%;
     }
 
-    #command-input {
-        column-span: 2;
-        border: none;
-        border-top: solid white;
-        background: $surface;
-    }
-
-    /* Split Calculation Setup Panel */
-
-
+    /* --- Setup Wizard: Step 1 (File Selection) --- */
     #setup-tree-container {
         width: 1fr;
         border-right: solid white 30%;
@@ -146,28 +162,24 @@ class KistwrapTUI(App):
     }
 
     #file-container-grid {
-        layout:grid;
-        grid-size:1 2;
+        layout: grid;
+        grid-size: 1 2;
         grid-rows: 1fr 5;
-        padding:1;
-        padding-bottom:-1;
+        padding: 1;
         width: 1fr;
         overflow-y: auto;
     }
 
     #selected-files-container {
-        padding:1;
-        height:100%;
-        padding-bottom:-1;
+        padding: 1;
+        height: 100%;
+        padding-bottom: -1;
         width: 1fr;
         overflow-y: auto;
     }
 
-
-
-    /* Removable File Row Styling */
     .selected-file-row {
-        height: auto; /* Makes the row compact */
+        height: auto;
         width: 100%;
         margin-bottom: 1;
         align: left middle;
@@ -179,19 +191,75 @@ class KistwrapTUI(App):
         padding-left: 1;
     }
 
-    .btn-remove-file {
-        min-width: 5;
-        width: 2;
-        height: 1;
-        border: none;
-        background:red;
+
+    #out-filename-grid {
+        layout: grid;
+        grid-size: 1 2;
+        grid-rows: 1fr 5; /* Stretches the list, anchors the buttons */
+        width: 1fr;
+        padding:1;
+        height: 100%;
     }
 
-    .full-btns {
-        margin:1;
-        width:100%;
+    #config-files-container {
+        height: 100%;
+        overflow-y: auto;
     }
-    """
+
+        /* Flattened Configuration Row Styling */
+    .config-row {
+        height: 3;
+        width: 100%;
+        margin-bottom: 1;
+        border-bottom: solid white 30%;
+        align: left middle; /* Vertically centers the button alongside the text */
+    }
+
+    .config-label {
+        width: 1fr;
+        height: 3;
+        color: $success;
+        padding-left: 1;
+    }
+
+    .config-input {
+        width: 1fr;
+        height: 3;
+        border: none;
+        content-align: left bottom;
+        background: $surface;
+    }
+
+    /* --- Execution & Job Explorer Styling --- */
+    #sidebar-switcher {
+        height: 100%;
+        border-right: solid white 30%;
+    }
+
+    #job-explorer-area {
+        height: 100%;
+        layout: grid;
+        grid-size: 1 2;
+        grid-rows: auto 1fr;
+        padding: 1;
+    }
+
+    #job-explorer-list {
+        height: 100%;
+        overflow-y: auto;
+        border-top: solid white 30%;
+        padding-top: 1;
+        margin-top: 1;
+    }
+
+    .job-item {
+        width: 100%;
+        height: auto;
+        padding: 1 0;
+        content-align: left middle;
+    }
+
+"""
 
     def __init__(self, *args, **kwargs):
         """Initialize the app and setup double-click tracking variables."""
@@ -243,46 +311,67 @@ class KistwrapTUI(App):
         with Grid(id="display-panel"):
             
             # Left Sub-Panel: Dynamic Configuration Forms
-            with ContentSwitcher(initial="opt-molec", id="calc-config-area"):
-                
-                with Vertical(id="opt-molec"):
-                    yield Label("Thermodynamic Properties", classes="var-title")
-                    yield Button("Choose File(s)", id="btn-select-files", variant="primary", classes="full-btns")
-                    yield Button("Start Batch Job", id="btn-start-molec", variant="primary", classes="full-btns")
-                
-                with Vertical(id="opt-rpath"):
-                    yield Label("Reaction Path", classes="var-title")
-                    yield Input(placeholder="Number of points (--pts)")
-                    yield Input(placeholder="IRC points array")
-                    yield Button("Run RPath", variant="success")
-                
-                with Vertical(id="opt-rates"):
-                    yield Label("Rate Constants", classes="var-title")
-                    yield RadioSet(RadioButton("TST"), RadioButton("VTST"), id="theory-set")
-                    yield Select([("None", "none"), ("Wigner", "Wig"), ("Eckart", "Eck")], prompt="Tunneling", id="tunnel-select")
-                    yield Input(placeholder="Reverse Barrier (-revb)")
-                    yield Button("Run Rates", variant="success")
-                
-                with Vertical(id="opt-equil"):
-                    yield Label("Equilibrium", classes="var-title")
-                    yield Placeholder("Bimolecular File Inputs")
+            # Left Sub-Panel: Master Switcher (Info Mode vs Job Explorer)
+            with ContentSwitcher(initial="calc-config-area", id="sidebar-switcher"):
+
+                # State 1: Info Mode (Pre-Execution)
+                with ContentSwitcher(initial="opt-molec", id="calc-config-area"):
+                    
+                    with Vertical(id="opt-molec"):
+                        yield Label("Atom/Molecule Calculation.", classes="var-title")
+                        yield Static("Saves a .kinp file containing thermodynamic properties of the input atom. Configure parameters in the sidebar.\n\nProceed to the wizard on the right to select files and initiate the batch process.")
+                    
+                    with Vertical(id="opt-rpath"):
+                        yield Label("Reaction Path", classes="var-title")
+                        yield Input(placeholder="Number of points (--pts)")
+                        yield Input(placeholder="IRC points array")
+                        yield Label("Select files in the wizard to continue.")
+                    
+                    with Vertical(id="opt-rates"):
+                        yield Label("Rate Constants", classes="var-title")
+                        yield RadioSet(RadioButton("TST"), RadioButton("VTST"), id="theory-set")
+                        yield Select([("None", "none"), ("Wigner", "Wig"), ("Eckart", "Eck")], prompt="Tunneling", id="tunnel-select")
+                        yield Input(placeholder="Reverse Barrier (-revb)")
+                        yield Label("Select files in the wizard to continue.")
+                    
+                    with Vertical(id="opt-equil"):
+                        yield Label("Equilibrium", classes="var-title")
+                        yield Placeholder("Bimolecular File Inputs")
+
+                # State 2: Job Explorer (Post-Execution)
+                with Vertical(id="job-explorer-area"):
+                    with Vertical():
+                        yield Label("Execution Status", classes="var-title")
+                        yield Label("Processing batch queue...", id="job-status-label")
+                    with VerticalScroll(id="job-explorer-list"):
+                        # Dynamic tracking labels will be mounted here
+                        pass
 
             with TabbedContent(id="results-area"):
                 with TabPane("Calculation Setup", id="tab-setup"):
-                    with Horizontal(id="calc-setup-container"):
-                        # Left Side: Full System File Explorer
-                        with Vertical(id="setup-tree-container"):
-                            yield Label("1. Double-Click to Add Files", classes="var-title")
-                            yield DirectoryTree(os.path.expanduser("~"), id="full-system-tree")
-                        
-                        # Right Side: Added Files List
-                        with Grid(id="file-container-grid"):
-                            with VerticalScroll(id="selected-files-container"):
-                                yield Label("2. Selected Batch Files", classes="var-title")
-                            with Horizontal():
-                                yield Button("Clear",id="clear-files", variant="primary", classes="half-btns")
-                                yield Button("Continue",id="cont-selected-files", variant="primary", classes="half-btns")
-                    
+                    with ContentSwitcher(initial="calc-setup-container", id="setup-switcher"):
+                        with Horizontal(id="calc-setup-container"):
+                            with Vertical(id="setup-tree-container"):
+                                yield Label("1. Double-Click to Add Files", classes="var-title")
+                                yield DirectoryTree(os.path.expanduser("~"), id="full-system-tree")
+                            
+                            with Grid(id="file-container-grid"):
+                                with VerticalScroll(id="selected-files-container"):
+                                    yield Label("2. Selected Batch Files", classes="var-title")
+                                with Horizontal():
+                                    yield Button("Clear",id="clear-files", variant="primary", classes="half-btns")
+                                    yield Button("Continue",id="cont-selected-files", variant="primary", classes="half-btns")
+
+                        with Horizontal(id="output-filename-setup"):                             
+                             with Grid(id="out-filename-grid"):
+                                 with VerticalScroll(id="config-files-container"):
+                                     yield Label("3. Configure Output Filenames", classes="var-title")
+                                 with Horizontal():
+                                     yield Button("Back",id="back-to-file-select", variant="primary", classes="half-btns")
+                                     yield Button("Run Calculation",id="run-calc", variant="primary", classes="half-btns")
+                                     
+                with TabPane("Console Logs", id="tab-console"):
+                    yield RichLog(id="console-log", highlight=True, markup=True)
                 with TabPane("Table Data"):
                     yield Placeholder("DataTable for parsed properties will render here.")
                 with TabPane("Arrhenius Plot"):
@@ -330,6 +419,9 @@ class KistwrapTUI(App):
         # 4. Handle File Removal (Destroy the row if the "-" button is clicked)
         elif event.button.id and event.button.id.startswith("rm_file_"):
             event.button.parent.remove()
+            
+        elif event.button.id and event.button.id.startswith("rm_conf_"):
+            event.button.parent.remove()
 
         elif event.button.id == "clear-files":
             container = self.query_one("#selected-files-container", VerticalScroll)
@@ -337,13 +429,78 @@ class KistwrapTUI(App):
             container.remove_children(children_to_remove)
 
         elif event.button.id == "cont-selected-files":
-            #EVENT HANDLING REQUIRED HERE
-            pass
+            step1_container = self.query_one("#selected-files-container", VerticalScroll)
+            rows = step1_container.query(".selected-file-row")
             
-    def on_molec_files_selected(self):
-        """Triggers when the selected files for Molecular calculations are submitted using Continue button."""
-        panel = self.query_one("#tab-setup")
-        panel.clear()
+            if not rows:
+                self.notify("Please select at least one file first!", severity="error")
+                return
+                
+            config_container = self.query_one("#config-files-container", VerticalScroll)
+            
+            # Clear previous configurations
+            children = config_container.query(".config-row")
+            config_container.remove_children(children)
+            
+            # Map selected files to the editable config rows
+            for row in rows:
+                file_name = str(row.name)
+                # Strip original extension so we don't get double extensions
+                base_name = os.path.splitext(file_name)[0]
+                safe_id = f"conf_{file_name.replace('.', '_').replace(' ', '_')}"
+
+                # 100% flat layout: Button -> Label -> Input
+                new_row = Horizontal(
+                    Button("-", variant="error", classes="btn-remove-file", id=f"rm_{safe_id}"),
+                    Label(file_name, classes="config-label"),
+                    Input(value=f"{base_name}.kinp", id=f"out_{safe_id}", classes="config-input"),
+                    classes="config-row",
+                    id=f"row_{safe_id}"
+                )
+                config_container.mount(new_row)
+
+
+
+            
+            # Flip the switcher to the config screen
+            switcher = self.query_one("#setup-switcher", ContentSwitcher)
+            switcher.current = "output-filename-setup"
+            
+        elif event.button.id == "back-to-file-select":
+            switcher = self.query_one("#setup-switcher", ContentSwitcher)
+            switcher.current = "calc-setup-container"
+            
+        elif event.button.id == "run-calc":
+            # 1. Flip the sidebar to the Job Explorer
+            sidebar_switcher = self.query_one("#sidebar-switcher", ContentSwitcher)
+            sidebar_switcher.current = "job-explorer-area"
+
+            # 2. Populate the Job Explorer with our configured files
+            explorer_list = self.query_one("#job-explorer-list", VerticalScroll)
+            config_rows = self.query(".config-row")
+
+            for row in config_rows:
+                # Extract the final .kinp filename from the input box
+                kinp_input = row.query_one(".config-input", Input)
+                file_name = kinp_input.value
+                
+                # Mount a tracking label for each job
+                job_label = Label(f"⏳ {file_name}", classes="job-item", id=f"job_{file_name.replace('.', '_')}")
+                explorer_list.mount(job_label)
+
+            # 3. Flip the main view to the Console Logs
+            tabs = self.query_one("#results-area", TabbedContent)
+            tabs.active = "tab-console"
+
+            # 4. Write initial status to the log
+            console = self.query_one("#console-log", RichLog)
+            console.write("[bold cyan]Initializing KiSThelP Batch Execution...[/bold cyan]")
+            
+            self.notify("Batch Execution Started!", severity="success")
+            
+            # TODO: Phase 2 - Trigger the background @work thread here
+
+            
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         """Triggers when a file is selected from the setup directory tree."""
@@ -380,7 +537,9 @@ class KistwrapTUI(App):
             Label(file_name),
             Button("-", variant="error", classes="btn-remove-file", id=f"rm_{safe_id}"),
             classes="selected-file-row",
-            id=f"row_{safe_id}"
+            id=f"row_{safe_id}",
+            name=file_name
+            
         )
         
         container = self.query_one("#selected-files-container", VerticalScroll)
@@ -395,6 +554,35 @@ class KistwrapTUI(App):
         """Switch the configuration panel when a new calculation is selected."""
         switcher = self.query_one("#calc-config-area", ContentSwitcher)
         switcher.current = event.option.id
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Lock the .kinp extension robustly to prevent editing artifacts."""
+        if event.input.id and event.input.id.startswith("out_conf_"):
+            val = event.value
+            
+            # Only intercept if they mess with the actual extension
+            if not val.endswith(".kinp"):
+                
+                # 1. Safely extract the base name by slicing at the last dot
+                if "." in val:
+                    base = val.rsplit(".", 1)[0]
+                else:
+                    # If they deleted the dot entirely, clear leftover fragments
+                    base = val
+                    for suffix in ["kinp", "inp", "np", "p"]:
+                        if base.endswith(suffix):
+                            base = base[:-len(suffix)]
+                            break
+                
+                if not base:
+                    base = "output"
+                    
+                # 2. Silently lock the value and prevent the cursor from jumping
+                with event.input.prevent(Input.Changed):
+                    event.input.value = f"{base}.kinp"
+                    # Pin the cursor back to the base word so it doesn't get trapped in the extension
+                    event.input.cursor_position = min(event.input.cursor_position, len(base))
+
 
 if __name__ == "__main__":
     app = KistwrapTUI()
