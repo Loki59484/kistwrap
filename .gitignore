@@ -26,3 +26,10 @@ docs/_build/
 
 # OS generated files
 .DS_Store
+
+#kistwrap logs
+log_archives
+kistwrap*.log
+
+#venv
+kistvenv

@@ -86,7 +86,7 @@ public class CLIinterface {
 
         // CLI options to accept input/session filepath and output filepaths
         @Option(names = {"-i",
-            "-inputfile"}, description = "Enter a session file (.kstp) or Input file(.kinp)")
+            "--inputfile"}, description = "Enter a session file (.kstp) or Input file(.kinp)")
         private File inputfile;
 
         public File getInputfile() {

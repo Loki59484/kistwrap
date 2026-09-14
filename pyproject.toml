@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Python CLI wrapper for the KiSThelP kinetics computational package."
 dependencies = [
     "pandas",
+    "textual"
 ]
 
 [project.scripts]
