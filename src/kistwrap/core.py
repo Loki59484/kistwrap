@@ -9,11 +9,19 @@ logger = logging.getLogger(__name__)
 class KisthelpEngine:
     """Bridge between Python and the Java KiSThelP engine."""
     
-    def __init__(self, engine_dir="kisthelp_engine"):
-        self.engine_dir = Path(engine_dir)
+    def __init__(self, engine_dir=None):
+        # Dynamically locate the repository root relative to this Python file
+        # Assumes core_2.py is located at /.../kistwrap/src/kistwrap/core_2.py
+        if engine_dir is None:
+            base_dir = Path(__file__).resolve().parents[2]
+            self.engine_dir = base_dir / "kisthelp_engine"
+        else:
+            self.engine_dir = Path(engine_dir).resolve()
+            
         self.classpath = f"{self.engine_dir}/bin:{self.engine_dir}/lib/*"
         self.main_class = "Kistep"
         logger.debug(f"KisthelpEngine initialized. Classpath: {self.classpath}. CWD: {os.getcwd()}")
+
 
     def validate_output_file(self, file_path: str) -> tuple[bool, str]:
         """
@@ -28,8 +36,6 @@ class KisthelpEngine:
         if path.suffix.lower() not in valid_extensions:
             return False, f"Invalid extension. Expected .log, .out, or .kinp."
             
-        if not path.exists() or path.stat().st_size < 1024:
-            return False, "File is suspiciously small or empty."
 
         # If it is already a parsed .kinp file, bypass the raw log checks
         if path.suffix.lower() == ".kinp":
@@ -72,7 +78,7 @@ class KisthelpEngine:
             return False, f"Validation error: {str(e)}"
 
         
-    def build_command(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none") -> list[str]:
+    def build_command(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None) -> list[str]:
         """Constructs the Picocli command array for the Java subprocess."""
         command_map = {
             "opt-tst": "TST",
@@ -86,20 +92,22 @@ class KisthelpEngine:
         cmd = [
             "java", "-Djava.awt.headless=true", "-cp", self.classpath, self.main_class, "--headless",
             "calc", java_cmd, 
-            "-i", input_file
+            "-i", input_file,
+            "-sd"  # Force the Java engine to write the CSV data
         ]
         
         if isinstance(tunneling, str) and tunneling.lower() != "none":
             cmd.extend(["--tunnel", tunneling])
             
+        if temp_range:
+            cmd.extend(["-T", temp_range])
+            
         logger.debug(f"Built Java Command: {' '.join(cmd)}")
         return cmd
 
-
-
-    def stream_job(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none"):
+    def stream_job(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None):
         """Yields stdout lines one by one for real-time TUI streaming."""
-        cmd = self.build_command(calc_type, input_file, output_file, tunneling)
+        cmd = self.build_command(calc_type, input_file, output_file, tunneling, temp_range)
         logger.info(f"Starting subprocess for {input_file} -> {output_file}| command {cmd}")
         try:
             process = subprocess.Popen(

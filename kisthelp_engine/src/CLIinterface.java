@@ -402,28 +402,71 @@ public class CLIinterface {
                             new InertStatisticalSystem(workSession.getTemperatureMin(), workSession.getPressureMin(),
                                     sessionFiles.getInputfile()));
 
-                    // make available the results save menu if session is not empty AND !! if the
-                    // single temperature or pressure range is invoked
-                    if ((Session.getCurrentSession().getTemperatureMin() == Session.getCurrentSession()
-                            .getTemperatureMax())
-                            && (Session.getCurrentSession().getPressureMin() == Session.getCurrentSession()
-                            .getPressureMax())) {
-                        // saveResults.setEnabled(true);
-                    } else {
-                        // saveResults.setEnabled(false);
+                    // --- ADD THIS MISSING BLOCK ---
+                    if (calcoptions.getPressure() != null) {
+                        System.out.println("Pressure settings :" + calcoptions.getPressure());
+                        setPressure(this.workSession, calcoptions.getPressure());
                     }
 
-                    // resetSetEnabled(true);
-                    // saveInputs.setEnabled(true);
-                    // reactPathBuild.setEnabled(false);
-                    // display results
-                    if (calcoptions.getShowresult()) {
-                        guiLancher();
-                        workSession.displayResults();
+                    if (calcoptions.getTemp() != null) {
+                        setTemp(this.workSession, calcoptions.getTemp());
                     }
+                    // ------------------------------
+
+                    if (calcoptions.getShowresult() || calcoptions.saveFlag) {
+                        InertStatisticalSystem system = (InertStatisticalSystem) workSession.getSessionContent().get(0);
+                        
+                        // 1. Single-point thermodynamic table (for DataTable)
+                        File outFile = sessionFiles.getOutputfile();
+                        String baseName = (outFile != null) 
+                            ? outFile.getAbsolutePath().replaceAll("\\.[^.]+$", "") 
+                            : sessionFiles.getInputfile().getAbsolutePath().replaceAll("\\.[^.]+$", "");
+                    
+                        ActionOnFileWrite writer = new ActionOnFileWrite(baseName + "_table.csv");
+                        system.saveTxtResults(writer);
+                        writer.end();
+
+                        // 2. Temperature range scan (for Plotext graphing)
+                        if (calcoptions.getTemp() != null && calcoptions.getTemp().size() > 1) {
+                 	       System.out.println("Saving Plot file.");
+
+                            try (BufferedWriter bw = new BufferedWriter(new FileWriter(baseName + "_plot.csv"))) {
+                                bw.write("T(K),H(kJ/mol),S(J/mol/K),G(kJ/mol),Cp(J/mol/K)");
+                                bw.newLine();
+                                double tStep = workSession.getStepTemperature();
+                                for (double t = workSession.getTemperatureMin(); t <= workSession.getTemperatureMax(); t += tStep) {
+                                    system.setTemperature(t);
+                                    bw.write(String.format(Locale.US, "%.2f,%.4f,%.4f,%.4f,%.4f", 
+                                        t, system.getHTot() / 1000.0, system.getSTot(), system.getGTot() / 1000.0, system.getCpTot()));
+                                    bw.newLine();
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Failed to write plot data: " + e.getMessage());
+                            }
+                        }
+                        	
+                    
+                        if (calcoptions.getShowresult()) {
+                            guiLancher();
+                            workSession.displayResults();
+                        }
+                    }
+                    
                     System.out.println(".kinp files written successfully.");
                     return 0;
 
+                } catch (TemperatureStepException error) {
+                    new CommandLine(this).usage(System.err);
+                    return 1;
+                } catch (TemperatureException error) {
+                    new CommandLine(this).usage(System.err);
+                    return 1;
+                } catch (PressureStepException error) {
+                    new CommandLine(this).usage(System.err);
+                    return 1;
+                } catch (PressureException error) {
+                    new CommandLine(this).usage(System.err);
+                    return 1;
                 } catch (CancelException error) {
                     new CommandLine(this).usage(System.err);
                     return 1;
@@ -440,9 +483,7 @@ public class CLIinterface {
                     new CommandLine(this).usage(System.err);
                     return 1;
                 }
-
             }
-
         }
 
         // TST

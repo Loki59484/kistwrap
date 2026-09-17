@@ -3,11 +3,15 @@ Terminal User Interface for Kistwrap to offer users an interactive tool to visua
 """
 from textual.containers import Vertical, Horizontal, Center, Grid, VerticalScroll
 from textual.widgets.option_list import Option
+from textual.events import Click
+from textual_plotext import PlotextPlot  
+from textual.widgets import DataTable
 from textual.app import App, ComposeResult
 from kistwrap.core import KisthelpEngine
 from datetime import datetime
 from pathlib import Path
 from textual import work
+import pandas as pd
 import logging
 import shutil
 import time
@@ -32,24 +36,25 @@ from textual.widgets import (
     RichLog,
     Static
 )
+# Professionally route all logs to a hidden directory in the user's home folder
+APP_DIR = Path.home() / ".kistwrap"
+ARCHIVE_DIR = APP_DIR / "log_archives"
+LOG_FILE = APP_DIR / "kistwrap_debug.log"
 
-
-# --- Session-Based Log Archiving ---
-LOG_FILE = 'kistwrap_debug.log'
-ARCHIVE_DIR = 'log_archives'
+# Ensure the required directories exist before proceeding
+APP_DIR.mkdir(parents=True, exist_ok=True)
+ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # If a previous log exists, move it to the archive folder with a timestamp
-if os.path.exists(LOG_FILE):
-    os.makedirs(ARCHIVE_DIR, exist_ok=True)
-    # Get the time the old log was last modified
-    timestamp = datetime.fromtimestamp(os.path.getmtime(LOG_FILE)).strftime('%Y%m%d_%H%M%S')
-    archived_name = os.path.join(ARCHIVE_DIR, f'kistwrap_{timestamp}.log')
-    shutil.move(LOG_FILE, archived_name)
+if LOG_FILE.exists():
+    timestamp = datetime.fromtimestamp(LOG_FILE.stat().st_mtime).strftime('%Y%m%d_%H%M%S')
+    archived_name = ARCHIVE_DIR / f'kistwrap_{timestamp}.log'
+    shutil.move(str(LOG_FILE), str(archived_name))
 
 # Configure the global logger BEFORE initializing the App
 logging.basicConfig(
-    filename=LOG_FILE,
-    filemode='w', # 'w' explicitly starts a fresh file for the current session
+    filename=str(LOG_FILE),
+    filemode='w',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.DEBUG
 )
@@ -152,7 +157,7 @@ class KistwrapTUI(App):
     .var-title {
         color: yellow;
         text-style: bold;
-        margin-bottom: 1;
+        margin-bottom:1;        
     }
 
     .var-row {
@@ -278,7 +283,7 @@ class KistwrapTUI(App):
     }
 
     #job-explorer-list {
-        height: 100%;
+        height: 30;
         overflow-y: auto;
         border-top: solid white 30%;
         padding-top: 1;
@@ -291,6 +296,11 @@ class KistwrapTUI(App):
         padding: 1 0;
         content-align: left middle;
     }
+
+    #results-table,#thermo-plot {
+        border: solid cyan;
+    }
+
 
 """
 
@@ -376,8 +386,8 @@ class KistwrapTUI(App):
 
                 # State 2: Job Explorer (Post-Execution)
                 with Vertical(id="job-explorer-area"):
-                    yield Label("Execution Status", classes="var-title")
-                    yield Label("Processing batch queue...", id="job-status-label")
+                    with Vertical():
+                        yield Label("Execution Status", classes="var-title")
                     with VerticalScroll(id="job-explorer-list"):
                         with Collapsible(title="Pending Queue", id="queue-pending", collapsed=False):
                             pass
@@ -412,10 +422,11 @@ class KistwrapTUI(App):
                                      
                 with TabPane("Console Logs", id="tab-console"):
                     yield RichLog(id="console-log", highlight=True, markup=True)
-                with TabPane("Table Data"):
-                    yield Placeholder("DataTable for parsed properties will render here.")
-                with TabPane("Arrhenius Plot"):
-                    yield Placeholder("Graphing component (Plotext) will render here.")
+                with TabPane("Results", id="tab-results"):
+                    with Vertical(id="results-container"):
+                        yield DataTable(id="results-table")
+                        yield PlotextPlot(id="thermo-plot")
+
 
         # 4. Command Bar
         yield Input(placeholder="Enter commands:", id="command-input")
@@ -432,7 +443,7 @@ class KistwrapTUI(App):
             pass
 
     def route_job_label(self, safe_id: str, out_name: str, status: str, color: str, target_queue: str, count: int) -> None:
-        """Moves a job label to the success or failed partition."""
+        """Moves a job label to the success or failed partition and attaches the file path."""
         try:
             # Update the collapsible title count
             queue = self.query_one(target_queue, Collapsible)
@@ -442,13 +453,102 @@ class KistwrapTUI(App):
             # Remove from pending and mount in the new queue
             old_label = self.query_one(f"#{safe_id}", Label)
             old_label.remove()
-            queue.mount(Label(f"[{color}]{status}: {out_name}[/{color}]", classes="job-item", id=f"result_{safe_id}"))
+            
+            new_label = Label(f"[{color}]{status}: {out_name}[/{color}]", classes="job-item", id=f"result_{safe_id}")
+            new_label.job_output_path = str(out_name)  # Store the path on the widget for data extraction
+            queue.mount(new_label)
         except Exception as e:
             logger.error(f"UI Routing Error: {e}")
 
+    async def on_click(self, event: Click) -> None:
+        """Listens for clicks on completed jobs in the explorer."""
+        # If the user clicks a completed job label
+        if isinstance(event.control, Label) and event.control.has_class("job-item") and "result_" in event.control.id:
+            if hasattr(event.control, 'job_output_path'):
+                await self.load_csv_data(event.control.job_output_path)
+    async def load_csv_data(self, kinp_path: str) -> None:
+        """Reads the CSVs via pandas, fixes headers, and updates UI widgets."""
+        base_path = kinp_path.rsplit('.', 1)[0]
+        table_csv = f"{base_path}_table.csv"
+        plot_csv = f"{base_path}_plot.csv"
+        
+        # 1. Populate DataTable
+        try:
+            if os.path.exists(table_csv):
+                df_table = pd.read_csv(table_csv, skiprows=3, header=None)
+                df_table = df_table.iloc[:, :6]
+                df_table.columns = ["Property", "Translation", "Vibration", "Rotation", "Electronic", "Total"]
+                
+                symbol_map = {
+                    "Q": "Q (Partition Func)",
+                    "Up (kJ/mol)": "ΔU (kJ/mol)",
+                    "ZPE (kJ/mol)": "ZPE (kJ/mol)",
+                    "H_0K (kJ/mol)": "ΔH(0K) (kJ/mol)",
+                    "U° (kJ/mol)": "U° (kJ/mol)",
+                    "U  (kJ/mol)": "U (kJ/mol)",
+                    "H° (kJ/mol)": "H° (kJ/mol)",
+                    "H  (kJ/mol)": "H (kJ/mol)",
+                    "S° (J/mol/K)": "S° (J/mol/K)",
+                    "S  (J/mol/K)": "S (J/mol/K)",
+                    "G° (kJ/mol)": "G° (kJ/mol)",
+                    "G  (kJ/mol)": "G (kJ/mol)",
+                    "Cv (J/mol/K)": "Cv (J/mol/K)",
+                    "Cp (J/mol/K)": "Cp (J/mol/K)"
+                }
+                
+                df_table["Property"] = df_table["Property"].astype(str).str.strip().replace(symbol_map)
+                df_table = df_table.fillna("")
+                
+                table_widget = self.query_one("#results-table", DataTable)
+                table_widget.clear(columns=True)
+                table_widget.add_columns(*[str(c) for c in df_table.columns])
+                
+                for _, row in df_table.iterrows():
+                    table_widget.add_row(*[str(x) for x in row.tolist()])
+            else:
+                logger.warning(f"Table CSV not found: {table_csv}")
+        except Exception as e:
+            logger.error(f"Failed to load table CSV: {e}")
+            
+        # 2. Populate Plotext Graph
+        try:
+            if os.path.exists(plot_csv):
+                df_plot = pd.read_csv(plot_csv)
+                
+                # Grab the widget and its plotext instance
+                plot_widget = self.query_one("#thermo-plot", PlotextPlot)
+                plt = plot_widget.plt
+                
+                # Clear the old graph data instead of destroying the widget
+                plt.clear_figure()
+                
+                # Styling
+                plt.title("Thermodynamic Profile")
+                plt.xlabel("Temperature (K)")
+                plt.ylabel("Energy (kJ/mol)")
+                plt.theme("clear")
+                
+                # Plotext natively uses high-definition Braille dots. No marker arg needed!
+                plt.plot(df_plot['T(K)'].tolist(), df_plot['G(kJ/mol)'].tolist(), label="Gibbs Free Energy (G)", color="cyan",marker="dot")
+                plt.plot(df_plot['T(K)'].tolist(), df_plot['H(kJ/mol)'].tolist(), label="Enthalpy (H)", color="magenta",marker="dot")
+                
+                # Force the widget to render the new data
+                plot_widget.refresh()
+                
+            else:
+                logger.warning(f"Plot CSV not found: {plot_csv}")
+            
+            # Auto-switch the UI focus to the Table tab
+                # Auto-switch the UI focus to the Results tab
+            self.query_one("#results-area", TabbedContent).active = "tab-results"
+        except Exception as e:
+            logger.error(f"Failed to load plot CSV: {e}")
+
+
+
 
     @work(thread=True)
-    def execute_kisthelp_batch(self, batch_jobs: list[tuple[str, str, str]], calc_type: str, tunneling: str) -> None:
+    def execute_kisthelp_batch(self, batch_jobs: list[tuple[str, str, str]], calc_type: str, tunneling: str, temp_range: str) -> None:
         """Runs the Java engine, tracks success/failure, and partitions results."""
         logger.info(f"Background worker started for {len(batch_jobs)} jobs.")
         console = self.query_one("#console-log", RichLog)
@@ -461,7 +561,7 @@ class KistwrapTUI(App):
             self.app.call_from_thread(console.write, f"\n[bold yellow]--- Starting Job: {file_name} ---[/bold yellow]")
 
             job_failed = False
-            for line in self.engine.stream_job(calc_type, file_name, out_name, tunneling):
+            for line in self.engine.stream_job(calc_type, file_name, out_name, tunneling=tunneling, temp_range=temp_range):
                 # Detect crash signatures from the Java engine or subprocess
                 if "Process failed with exit code" in line or "Exception in thread" in line or "ERROR:" in line:
                     job_failed = True
@@ -624,11 +724,19 @@ class KistwrapTUI(App):
                 tunnel_val = tunnel_select.value if isinstance(tunnel_select.value, str) else "none"
             except Exception:
                 tunnel_val = "none"
+                        # ... tunnel_val extraction ...
             
-            logger.info(f"Triggering background @work thread for {selected_calc} with tunneling: {tunnel_val}")
-            self.execute_kisthelp_batch(batch_jobs, calc_type=selected_calc, tunneling=tunnel_val)
-
-
+            # Grab Temperature variables from the UI placeholders
+            try:
+                t_min = self.query_one("#t-min", Input).placeholder.replace("Min: ", "").strip()
+                t_max = self.query_one("#t-max", Input).placeholder.replace("Max: ", "").strip()
+                t_step = self.query_one("#t-step", Input).placeholder.replace("Step: ", "").strip()
+                temp_range = f"{t_min},{t_max},{t_step}"
+            except Exception:
+                temp_range = "298,1000,50"  # Safe fallback range
+            
+            logger.info(f"Triggering @work thread. Tunneling: {tunnel_val} | Temp: {temp_range}")
+            self.execute_kisthelp_batch(batch_jobs, calc_type=selected_calc, tunneling=tunnel_val, temp_range=temp_range)
             
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
