@@ -404,11 +404,11 @@ class KistwrapTUI(App):
                 
                 yield Label("Pressure Mode", classes="var-title")
                 with Horizontal(classes="radio-horizontal"):
-                    yield RadioSet(RadioButton("Range", id="p-range", value=True), RadioButton("Single", id="p-single"), id="p-mode")
+                    yield RadioSet(RadioButton("Range", id="p-range"), RadioButton("Single", id="p-single", value=True), id="p-mode")
                 with Horizontal(classes="var-row"):
-                    yield Input(placeholder="Min: 1.0", id="p-min")
-                    yield Input(placeholder="Max: 1.0", id="p-max")
-                    yield Input(placeholder="Step: 0.0", id="p-step")
+                    yield Input(placeholder="Value: 1.0", id="p-min")
+                    yield Input(placeholder="Max: 1.0", id="p-max", display=False)
+                    yield Input(placeholder="Step: 0.0", id="p-step", display=False)
                     
                 with Center(id="var-buttonholder"):
                     with Horizontal():

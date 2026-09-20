@@ -78,7 +78,7 @@ class KisthelpEngine:
             return False, f"Validation error: {str(e)}"
 
         
-    def build_command(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None) -> list[str]:
+    def build_command(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None, pressure_range: str = None) -> list[str]:
         """Constructs the Picocli command array for the Java subprocess."""
         command_map = {
             "opt-tst": "TST",
@@ -102,13 +102,17 @@ class KisthelpEngine:
         if temp_range:
             cmd.extend(["-T", temp_range])
             
+        if pressure_range:
+            cmd.extend(["-P", pressure_range])
+            
         logger.debug(f"Built Java Command: {' '.join(cmd)}")
         return cmd
 
-    def stream_job(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None):
+    def stream_job(self, calc_type: str, input_file: str, output_file: str, tunneling: str = "none", temp_range: str = None, pressure_range: str = None):
         """Yields stdout lines one by one for real-time TUI streaming."""
-        cmd = self.build_command(calc_type, input_file, output_file, tunneling, temp_range)
+        cmd = self.build_command(calc_type, input_file, output_file, tunneling, temp_range, pressure_range)
         logger.info(f"Starting subprocess for {input_file} -> {output_file}| command {cmd}")
+
         try:
             process = subprocess.Popen(
                 cmd,
