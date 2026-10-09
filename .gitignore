@@ -1,17 +1,32 @@
-# Compiled Java / Python
+# ==========================================
+# Compiled Java Artifacts & Build Folders
+# ==========================================
 *.class
-*.pyc
-__pycache__/
+*.jar
 bin/
+kisthelp_engine/bin/
+
+# ==========================================
+# Python Environments & Build Artifacts
+# ==========================================
+__pycache__/
+*.py[cod]
+kistvenv/
+.venv/
 build/
 dist/
 *.egg-info/
 
-# IDEs
-.vscode/
-.idea/
+# ==========================================
+# Kistwrap Runtime Logs & Application State
+# ==========================================
+kistwrap_debug.log
+.kistwrap/
+log_archives/
 
-# Chemistry Software / Job outputs
+# ==========================================
+# Chemistry Software Outputs & Generated CSVs
+# ==========================================
 *.logfile
 *.err
 *.pid
@@ -19,17 +34,18 @@ dist/
 *.ams
 *.out~
 *.tbz2
+*.kinp
+*_table.csv
+*_plot.csv
 
-# Generated Documentation 
-kisthelp_engine/KisthelpDocumentation/KisthelpProgDocumentation/
-docs/_build/
+# ==========================================
+# IDEs & Editor Settings
+# ==========================================
+.vscode/
+.idea/
 
-# OS generated files
+# ==========================================
+# OS Generated Files
+# ==========================================
 .DS_Store
-
-#kistwrap logs
-log_archives
-kistwrap*.log
-
-#venv
-kistvenv
+Thumbs.db

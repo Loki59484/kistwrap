@@ -112,6 +112,11 @@ class KistwrapTUI(App):
         width: 100%;
     }
 
+    .micro-btns {
+        min-width:8;
+        margin-right:1
+    }
+
     .btn-remove-file {
         min-width: 5;
         width: 2;
@@ -327,6 +332,19 @@ class KistwrapTUI(App):
         display: none; 
     }
 
+     .tree-nav {
+        height: 3;
+        align: left middle;
+        margin-bottom: 1;
+    }
+
+    .tree-input {
+        width: 1fr; /* Automatically fills the remaining space perfectly */
+        height:auto;
+        border:gray;
+        content-align: left middle; /* Centers the placeholder text vertically */
+        background:$surface;
+    }    
 
 """
 
@@ -450,7 +468,6 @@ class KistwrapTUI(App):
                         yield Label("Equilibrium", classes="var-title")
                         yield Placeholder("Bimolecular File Inputs")
 
-                # State 2: Job Explorer (Post-Execution)
                 with Vertical(id="job-explorer-area"):
                     with Vertical():
                         yield Label("Execution Status", classes="var-title")
@@ -468,8 +485,13 @@ class KistwrapTUI(App):
                     with ContentSwitcher(initial="calc-setup-container", id="setup-switcher"):
                         with Horizontal(id="calc-setup-container"):
                             with Vertical(id="setup-tree-container"):
-                                yield Label("1. Double-Click to Add Files", classes="var-title")
-                                yield DirectoryTree(os.path.expanduser("~"), id="full-system-tree")
+                                yield Label("1. Select Files", classes="var-title")
+                                with Horizontal(classes="tree-nav"):
+                                    yield Button("⬆ UP", id="btn-tree-up", variant="default", classes="micro-btns")
+                                    yield Button("🏠 Project Root", id="btn-tree-root", variant="default", classes="micro-btns")
+                                    yield Input(placeholder=str(Path.cwd()), id="tree-path-input", classes="tree-input")
+                                yield DirectoryTree(str(Path.cwd()), id="full-system-tree")
+
                             
                             with Grid(id="file-container-grid"):
                                 with VerticalScroll(id="selected-files-container"):
@@ -908,6 +930,27 @@ class KistwrapTUI(App):
 
             logger.info(f"Triggering @work thread. Tunneling: {tunnel_val} | Temp: {temp_range} | Press: {pressure_range}")
             self.execute_kisthelp_batch(batch_jobs, calc_type=selected_calc, tunneling=tunnel_val, temp_range=temp_range, pressure_range=pressure_range)
+
+                # Handle Directory Tree Navigation
+        elif event.button.id == "btn-tree-up":
+            tree = self.query_one("#full-system-tree", DirectoryTree)
+            new_path = str(Path(tree.path).parent)
+            tree.path = new_path
+            
+            # Sync the input bar
+            path_input = self.query_one("#tree-path-input", Input)
+            path_input.value = new_path
+            
+        elif event.button.id == "btn-tree-root":
+            tree = self.query_one("#full-system-tree", DirectoryTree)
+            new_path = str(Path.cwd())
+            tree.path = new_path
+            
+            # Sync the input bar
+            path_input = self.query_one("#tree-path-input", Input)
+            path_input.value = new_path
+
+
             
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
@@ -1038,6 +1081,23 @@ class KistwrapTUI(App):
         if event.pressed.id in plot_configs:
             col, title, color = plot_configs[event.pressed.id]
             self.redraw_plot(col, title, color)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handles 'Enter' presses for specific input fields."""
+        if event.input.id == "tree-path-input":
+            target_path = Path(event.value.strip()).resolve()
+            
+            # Validate that the path exists and is a directory
+            if target_path.exists() and target_path.is_dir():
+                tree = self.query_one("#full-system-tree", DirectoryTree)
+                tree.path = str(target_path)
+                logger.info(f"Directory tree path manually updated to: {target_path}")
+            else:
+                logger.warning(f"Invalid directory path submitted: {target_path}")
+                self.notify("Invalid directory path!", severity="error")
+                event.input.add_class("error-shake")
+
+
 
 if __name__ == "__main__":
     import argparse
