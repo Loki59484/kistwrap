@@ -30,28 +30,70 @@ def main():
         )
         app.run()
         
-    # 2. True Headless Execution (Fast-Path)
+    # 2. True Headless Execution (Fast-Path & Batch Jobs)
     elif args.input:
         in_path = Path(args.input).resolve()
         if not in_path.exists():
             print(f"Error: Input file not found: {in_path}")
             sys.exit(1)
             
-        out_name = args.output if args.output else f"{in_path.stem}.kinp"
-        out_path = in_path.parent / out_name
-        
-        print(f"\n[Kistwrap Headless] Starting {args.calc} for {in_path.name}")
-        print(f"Temperature: {args.temp} | Pressure: {args.pressure}")
-        print("-" * 50)
-        
         engine = KisthelpEngine()
-        # Ensure your stream_job method in core.py accepts the pressure_range kwarg!
-        for line in engine.stream_job(args.calc, str(in_path), str(out_path), tunneling="none", temp_range=args.temp, pressure_range=args.pressure):
-            sys.stdout.write(line + "\n")
-            sys.stdout.flush()
+        
+        # --- NEW: .job File Batch Processing ---
+        if in_path.suffix.lower() == ".job":
+            print(f"\n[Kistwrap Batch] Loading Job File: {in_path.name}")
+            print("-" * 60)
             
-        print("-" * 50)
-        print(f"Process complete. Output saved to {out_path.name}\n")
+            with open(in_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if not line or line.startswith("#"):
+                        continue
+                        
+                    parts = [p.strip() for p in line.split(";")]
+                    if len(parts) < 5:
+                        print(f"[WARNING] Skipping invalid line (requires 5 semicolon-separated parameters): {line}")
+                        continue
+                        
+                    j_in, j_out, j_calc, j_temp, j_press = parts[:5]
+                    
+                    # Resolve paths relative to where the CLI was executed
+                    j_in_path = Path(j_in).resolve()
+                    j_out_path = Path(j_out).resolve()
+                    
+                    print(f"\n▶ Executing: {j_in_path.name} -> {j_out_path.name}")
+                    print(f"  Calc: {j_calc} | Temp: {j_temp} | Press: {j_press}")
+                    
+                    if not j_in_path.exists():
+                        print(f"  [ERROR] Input file not found: {j_in_path}")
+                        continue
+                        
+                    for out_line in engine.stream_job(j_calc, str(j_in_path), str(j_out_path), tunneling="none", temp_range=j_temp, pressure_range=j_press):
+                        sys.stdout.write(out_line + "\n")
+                        sys.stdout.flush()
+                        
+            print("-" * 60)
+            print("Batch processing complete.\n")
+            
+        # --- EXISTING: Single File Processing ---
+        else:
+            if args.output:
+                out_path = Path(args.output).resolve()
+            else:
+                out_path = in_path.parent / f"{in_path.stem}.kinp"
+            
+            print(f"\n[Kistwrap Headless] Starting {args.calc} for {in_path.name}")
+            print(f"Temperature: {args.temp} | Pressure: {args.pressure}")
+            print("-" * 50)
+            
+            for line in engine.stream_job(args.calc, str(in_path), str(out_path), tunneling="none", temp_range=args.temp, pressure_range=args.pressure):
+                sys.stdout.write(line + "\n")
+                sys.stdout.flush()
+                
+            print("-" * 50)
+            print(f"Process complete. Output saved to {out_path}\n")
+
 
 if __name__ == "__main__":
     main()

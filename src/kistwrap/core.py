@@ -93,7 +93,8 @@ class KisthelpEngine:
             "java", "-Djava.awt.headless=true", "-cp", self.classpath, self.main_class, "--headless",
             "calc", java_cmd, 
             "-i", input_file,
-            "-sd"  # Force the Java engine to write the CSV data
+            "-o", output_file,  # <-- Added output flag to force the filename
+            "-sd"
         ]
         
         if isinstance(tunneling, str) and tunneling.lower() != "none":
