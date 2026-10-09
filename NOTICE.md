@@ -1,8 +1,8 @@
 # NOTICE
 
 ## Kistwrap
-Copyright (c) 2026 Loki59484
-Licensed under the MIT License.
+
+Copyright (c) 2026 Loki59484 Licensed under the MIT License.
 
 ---
 
